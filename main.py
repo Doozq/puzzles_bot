@@ -10,7 +10,9 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQu
 from config import category_names, difficulty_names
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from puzzle_generation import generate_puzzle_with_user_context, check_answer, generate_hint, clear_user_context
-from db_main_handler import initialize_database, add_user, get_leaderboard, get_user_rating, set_user_rating, add_log, user_exists, add_user, get_all_users
+from db_main_handler import initialize_database, add_user, get_leaderboard, get_user_rating, set_user_rating, add_log, \
+    user_exists, add_user, get_all_users, add_finished_task
+
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
@@ -261,6 +263,7 @@ async def process_user_answer(message: types.Message, state: FSMContext):
         score *= 0.9**hints_used
         rating = get_user_rating(user_id)
         set_user_rating(user_id, rating + score)
+        add_finished_task(user_id, puzzle_text)
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="Оценить", callback_data="rate")],
             [InlineKeyboardButton(text="Получить новую головоломку", callback_data="new_puzzle")],
@@ -327,6 +330,14 @@ async def handle_cancel(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     correct_answer = data.get("correct_answer")
     user_id = callback_query.from_user.id
+    difficulty = data.get("difficulty")
+    diff_points = {
+        "easy": 1,
+        "medium": 2,
+        "hard": 3
+    }
+    rating_before = get_user_rating(user_id)
+    set_user_rating(user_id, rating_before-diff_points[difficulty])
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Оценить", callback_data="rate")],
