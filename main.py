@@ -10,7 +10,9 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQu
 from config import category_names, difficulty_names
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from puzzle_generation import generate_puzzle_with_user_context, check_answer, generate_hint, clear_user_context
-from db_main_handler import initialize_database, add_user, get_leaderboard, get_user_rating, set_user_rating, add_log, user_exists, add_user, get_all_users
+from db_main_handler import initialize_database, add_user, get_leaderboard, get_user_rating, set_user_rating, add_log, \
+    user_exists, add_user, get_all_users, add_finished_task, get_all_finished_tasks
+
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
@@ -62,9 +64,8 @@ class CheckRegisterMiddleware(BaseMiddleware):
 def get_main_menu_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="Получить новую головоломку")],
-            [KeyboardButton(text="Таблица лидеров")],
-            [KeyboardButton(text="Профиль")]
+            [KeyboardButton(text="Получить новую головоломку"), KeyboardButton(text="Список решенных задач")],
+            [KeyboardButton(text="Таблица лидеров"), KeyboardButton(text="Профиль")]
         ],
         resize_keyboard=True,
         one_time_keyboard=False 
@@ -123,6 +124,14 @@ async def show_leaderboard(message: types.Message, state: FSMContext):
         if user["id"] == user_id:
             await message.answer(f"ФИО: {user['full_name']}\nРейтинг: {user['rating']}\nМесто в рейтинге: {i+1}")
             break
+
+
+@router.message(lambda message: message.text == "Список решенных задач")
+async def show_last_puzzles(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    tasks = get_all_finished_tasks(user_id)[-5:][::-1]
+
+    await message.answer(f"Последние 5 решенных вами задач:\n\n{'\n\n'.join(tasks)}")
 
     
 # Обработчик для кнопки "Получить новую головоломку"
@@ -261,6 +270,7 @@ async def process_user_answer(message: types.Message, state: FSMContext):
         score *= 0.9**hints_used
         rating = get_user_rating(user_id)
         set_user_rating(user_id, rating + score)
+        add_finished_task(user_id, puzzle_text)
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="Оценить", callback_data="rate")],
             [InlineKeyboardButton(text="Получить новую головоломку", callback_data="new_puzzle")],
@@ -271,7 +281,7 @@ async def process_user_answer(message: types.Message, state: FSMContext):
         # Уменьшаем количество попыток
         attempts_left -= 1
         score -= 0.5
-        state.update_data(score = score)
+        await state.update_data(score = score)
         
         if attempts_left > 0:
             await state.update_data(attempts_left=attempts_left)
@@ -327,6 +337,14 @@ async def handle_cancel(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     correct_answer = data.get("correct_answer")
     user_id = callback_query.from_user.id
+    difficulty = data.get("difficulty")
+    diff_points = {
+        "easy": 1,
+        "medium": 2,
+        "hard": 3
+    }
+    rating_before = get_user_rating(user_id)
+    set_user_rating(user_id, rating_before-diff_points[difficulty])
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Оценить", callback_data="rate")],

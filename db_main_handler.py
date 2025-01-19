@@ -206,7 +206,7 @@ def get_all_finished_tasks(user_id: int):
     tasks = cursor.fetchall()
 
     connection.close()
-    result = [{task[0]: task[1]} for task in tasks]
+    result = [task[1] for task in tasks]
 
     return result
 
