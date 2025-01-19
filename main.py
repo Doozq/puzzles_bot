@@ -11,7 +11,7 @@ from config import category_names, difficulty_names
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from puzzle_generation import generate_puzzle_with_user_context, check_answer, generate_hint, clear_user_context
 from db_main_handler import initialize_database, add_user, get_leaderboard, get_user_rating, set_user_rating, add_log, \
-    user_exists, add_user, get_all_users, add_finished_task
+    user_exists, add_user, get_all_users, add_finished_task, get_all_finished_tasks
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -64,9 +64,8 @@ class CheckRegisterMiddleware(BaseMiddleware):
 def get_main_menu_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="Получить новую головоломку")],
-            [KeyboardButton(text="Таблица лидеров")],
-            [KeyboardButton(text="Профиль")]
+            [KeyboardButton(text="Получить новую головоломку"), KeyboardButton(text="Список решенных задач")],
+            [KeyboardButton(text="Таблица лидеров"), KeyboardButton(text="Профиль")]
         ],
         resize_keyboard=True,
         one_time_keyboard=False 
@@ -125,6 +124,14 @@ async def show_leaderboard(message: types.Message, state: FSMContext):
         if user["id"] == user_id:
             await message.answer(f"ФИО: {user['full_name']}\nРейтинг: {user['rating']}\nМесто в рейтинге: {i+1}")
             break
+
+
+@router.message(lambda message: message.text == "Список решенных задач")
+async def show_last_puzzles(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    tasks = get_all_finished_tasks(user_id)[-5:][::-1]
+
+    await message.answer(f"Последние 5 решенных вами задач:\n\n{'\n\n'.join(tasks)}")
 
     
 # Обработчик для кнопки "Получить новую головоломку"
@@ -274,7 +281,7 @@ async def process_user_answer(message: types.Message, state: FSMContext):
         # Уменьшаем количество попыток
         attempts_left -= 1
         score -= 0.5
-        state.update_data(score = score)
+        await state.update_data(score = score)
         
         if attempts_left > 0:
             await state.update_data(attempts_left=attempts_left)
