@@ -9,7 +9,8 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, KeyboardButton, ReplyKeyboardMarkup
 from config import category_names, difficulty_names
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from puzzle_generation import generate_puzzle_with_user_context, check_answer, generate_hint, clear_user_context
+from aiogram.utils.formatting import Bold
+from puzzle_generation_v2 import generate_puzzle_with_user_context, check_answer, generate_hint, clear_user_context
 from db_main_handler import initialize_database, add_user, get_leaderboard, get_user_rating, set_user_rating, add_log, \
     user_exists, add_user, get_all_users, add_finished_task, get_all_finished_tasks
 
@@ -288,6 +289,8 @@ async def process_user_answer(message: types.Message, state: FSMContext):
             await message.answer(f"{comment}.\n\nОсталось попыток: {attempts_left}. Попробуйте снова.")
         else:
             correct_answer = data.get("correct_answer")
+            rating = get_user_rating(user_id)
+            set_user_rating(user_id, rating + score)
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="Оценить", callback_data="rate")],
                 [InlineKeyboardButton(text="Получить новую головоломку", callback_data="new_puzzle")],
@@ -321,7 +324,7 @@ async def handle_hint(callback_query: CallbackQuery, state: FSMContext):
     # Генерация подсказки (в данном случае для примера, можно дополнить логику)
     hint = generate_hint(user_id, puzzle_text)
 
-    await callback_query.message.answer(f"{hint}")
+    await callback_query.message.answer(f"Подсказка {hints_used}/3\n\n{hint}")
     await callback_query.answer()
 
 
